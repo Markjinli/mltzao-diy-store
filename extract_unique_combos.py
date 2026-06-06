@@ -7,7 +7,7 @@ from openpyxl.utils import get_column_letter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "products_full.json")
-EXCEL_PATH = os.path.join(BASE_DIR, "mltzao_unique_combos.xlsx")
+EXCEL_PATH = os.path.join(BASE_DIR, "mltzao_unique_combos_highest.xlsx")
 
 with open(JSON_PATH, "r", encoding="utf-8") as f:
     products = json.load(f)
