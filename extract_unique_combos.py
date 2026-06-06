@@ -7,225 +7,181 @@ from openpyxl.utils import get_column_letter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "products_full.json")
-EXCEL_PATH = os.path.join(BASE_DIR, "mltzao_unique_combos_highest.xlsx")
+EXCEL_PATH = os.path.join(BASE_DIR, "mltzao_unique_combos.xlsx")
 
 with open(JSON_PATH, "r", encoding="utf-8") as f:
     products = json.load(f)
 
 print(f"Loaded {len(products)} products")
 
-# ---- GPU core extraction ----
+
 def extract_gpu_core(gpu_name):
-    """Extract GPU core from full GPU name.
-    E.g., '华硕 DUAL-RTX3050-O6G' → 'RTX 3050'
-          '技嘉 RTX 5060 WINDFORCE OC 8G' → 'RTX 5060'
-          '盈通 RTX5060Ti 8G 大地之神' → 'RTX 5060 Ti'
-          '七彩虹 iGame RTX 5090 D v2 Vulcan W OC 24GB' → 'RTX 5090'
-          '华硕 ATS-RX7650GRE-O8G' → 'RX 7650 GRE'
-    """
+    """从显卡名称中提取GPU核心型号，如 RTX 5060, RTX 5060 Ti, RTX 3050 等"""
     if not gpu_name:
         return "未知"
 
-    name = gpu_name.upper()
+    # Pattern: RTX 5090 D, RTX 5090, RTX 5080, RTX 5070 Ti, RTX 5070, RTX 5060 Ti, RTX 5060, RTX 5050
+    # RTX 4090, RTX 4080S, RTX 4070 Ti S, RTX 4070S, RTX 4070, RTX 4060 Ti, RTX 4060
+    # RTX 3060, RTX 3050
+    # RX 9070, RX 9070 XT, RX 7600, RX 7600 XT, RX 6750 GRE
 
-    # NVIDIA patterns
-    # RTX 5090 D / RTX5090D
-    m = re.search(r'RTX\s*5090\s*D?', name)
+    patterns = [
+        # NVIDIA RTX 50 series
+        (r'RTX\s*5090\s*D', 'RTX 5090 D'),
+        (r'RTX\s*5090', 'RTX 5090'),
+        (r'RTX\s*5080', 'RTX 5080'),
+        (r'RTX\s*5070\s*Ti', 'RTX 5070 Ti'),
+        (r'RTX\s*5070', 'RTX 5070'),
+        (r'RTX\s*5060\s*Ti', 'RTX 5060 Ti'),
+        (r'RTX\s*5060', 'RTX 5060'),
+        (r'RTX\s*5050', 'RTX 5050'),
+        # NVIDIA RTX 40 series
+        (r'RTX\s*4090', 'RTX 4090'),
+        (r'RTX\s*4080\s*S', 'RTX 4080S'),
+        (r'RTX\s*4080', 'RTX 4080'),
+        (r'RTX\s*4070\s*Ti\s*S', 'RTX 4070 Ti S'),
+        (r'RTX\s*4070\s*Ti', 'RTX 4070 Ti'),
+        (r'RTX\s*4070\s*S', 'RTX 4070S'),
+        (r'RTX\s*4070', 'RTX 4070'),
+        (r'RTX\s*4060\s*Ti', 'RTX 4060 Ti'),
+        (r'RTX\s*4060', 'RTX 4060'),
+        # NVIDIA RTX 30 series
+        (r'RTX\s*3060', 'RTX 3060'),
+        (r'RTX\s*3050', 'RTX 3050'),
+        # AMD RX 9000 series
+        (r'RX\s*9070\s*XT', 'RX 9070 XT'),
+        (r'RX\s*9070', 'RX 9070'),
+        (r'RX\s*9060\s*XT', 'RX 9060 XT'),
+        (r'RX\s*9060', 'RX 9060'),
+        # AMD RX 7000 series
+        (r'RX\s*7900\s*XTX', 'RX 7900 XTX'),
+        (r'RX\s*7900\s*XT', 'RX 7900 XT'),
+        (r'RX\s*7800\s*XT', 'RX 7800 XT'),
+        (r'RX\s*7700\s*XT', 'RX 7700 XT'),
+        (r'RX\s*7600\s*XT', 'RX 7600 XT'),
+        (r'RX\s*7600', 'RX 7600'),
+        # AMD RX 6000 series
+        (r'RX\s*6950\s*XT', 'RX 6950 XT'),
+        (r'RX\s*7650\s*GRE', 'RX 7650 GRE'),
+        (r'RX\s*6750\s*GRE', 'RX 6750 GRE'),
+        (r'RX\s*6650\s*XT', 'RX 6650 XT'),
+        (r'RX\s*6600', 'RX 6600'),
+    ]
+
+    for pattern, core_name in patterns:
+        if re.search(pattern, gpu_name, re.IGNORECASE):
+            return core_name
+
+    # Fallback: try to extract any RTX/RX pattern
+    m = re.search(r'(RTX\s*\d{4}\s*(?:Ti|S|D)?)', gpu_name, re.IGNORECASE)
     if m:
-        return "RTX 5090"
-
-    m = re.search(r'RTX\s*5080', name)
+        return m.group(1).strip().upper()
+    m = re.search(r'(RX\s*\d{4}\s*(?:XT|GRE)?)', gpu_name, re.IGNORECASE)
     if m:
-        return "RTX 5080"
+        return m.group(1).strip().upper()
 
-    m = re.search(r'RTX\s*5070\s*TI', name)
-    if m:
-        return "RTX 5070 Ti"
-
-    m = re.search(r'RTX\s*5070', name)
-    if m:
-        return "RTX 5070"
-
-    m = re.search(r'RTX\s*5060\s*TI', name)
-    if m:
-        return "RTX 5060 Ti"
-
-    m = re.search(r'RTX\s*5060', name)
-    if m:
-        return "RTX 5060"
-
-    m = re.search(r'RTX\s*5050', name)
-    if m:
-        return "RTX 5050"
-
-    m = re.search(r'RTX\s*4090', name)
-    if m:
-        return "RTX 4090"
-
-    m = re.search(r'RTX\s*4080\s*S?', name)
-    if m:
-        return "RTX 4080 SUPER"
-
-    m = re.search(r'RTX\s*4070\s*TI\s*S', name)
-    if m:
-        return "RTX 4070 Ti SUPER"
-
-    m = re.search(r'RTX\s*4070\s*S', name)
-    if m:
-        return "RTX 4070 SUPER"
-
-    m = re.search(r'RTX\s*4070', name)
-    if m:
-        return "RTX 4070"
-
-    m = re.search(r'RTX\s*4060\s*TI', name)
-    if m:
-        return "RTX 4060 Ti"
-
-    m = re.search(r'RTX\s*4060', name)
-    if m:
-        return "RTX 4060"
-
-    m = re.search(r'RTX\s*3060', name)
-    if m:
-        return "RTX 3060"
-
-    m = re.search(r'RTX\s*3050', name)
-    if m:
-        return "RTX 3050"
-
-    # AMD patterns
-    m = re.search(r'RX\s*9070\s*XT', name)
-    if m:
-        return "RX 9070 XT"
-
-    m = re.search(r'RX\s*9070', name)
-    if m:
-        return "RX 9070"
-
-    m = re.search(r'RX\s*7900\s*XTX', name)
-    if m:
-        return "RX 7900 XTX"
-
-    m = re.search(r'RX\s*7900\s*XT', name)
-    if m:
-        return "RX 7900 XT"
-
-    m = re.search(r'RX\s*7800\s*XT', name)
-    if m:
-        return "RX 7800 XT"
-
-    m = re.search(r'RX\s*7700\s*XT', name)
-    if m:
-        return "RX 7700 XT"
-
-    m = re.search(r'RX\s*7650\s*GRE', name)
-    if m:
-        return "RX 7650 GRE"
-
-    m = re.search(r'RX\s*7600', name)
-    if m:
-        return "RX 7600"
-
-    m = re.search(r'RX\s*6750', name)
-    if m:
-        return "RX 6750 GRE"
-
-    m = re.search(r'RX\s*6650', name)
-    if m:
-        return "RX 6650 XT"
-
-    m = re.search(r'RX\s*6600', name)
-    if m:
-        return "RX 6600"
-
-    return gpu_name  # fallback
+    return gpu_name
 
 
-# ---- RAM spec extraction ----
-def extract_ram_spec(ram_name):
-    """Extract RAM capacity + type + frequency.
-    E.g., 'GEIL金邦 DDR4 16G 3200 内存条' → '16G DDR4 3200'
-          '芝奇 烈焰枪 32GB（16G*2）DDR5 6000 黑色（C28/EXPO）' → '32G DDR5 6000'
-          '佰维（BIWIN）时空行者DW100 48GB（24G*2）DDR5 6000' → '48G DDR5 6000'
-    """
-    if not ram_name:
+def extract_ram_spec(mem_name):
+    """从内存名称中提取容量+频率，如 '16G DDR4 3200', '32G DDR5 6000'"""
+    if not mem_name:
         return "未知"
 
-    # Extract capacity
-    cap = None
-    # Match patterns like "32GB（16G*2）" or "48GB（24G*2）" - total capacity first
-    m = re.search(r'(\d+)\s*GB\s*（', ram_name)
-    if m:
-        cap = int(m.group(1))
+    # Extract DDR type: DDR4, DDR5
+    ddr_match = re.search(r'(DDR[45])', mem_name, re.IGNORECASE)
+    ddr_type = ddr_match.group(1).upper() if ddr_match else ""
+
+    # Handle dual channel: "24Gx2", "16G*2", "16GB*2" → total capacity
+    dual_match = re.search(r'(\d+)\s*[Gg](?:B)?\s*[x\*]\s*(\d+)', mem_name)
+    if dual_match:
+        single = int(dual_match.group(1))
+        count = int(dual_match.group(2))
+        total = single * count
+        capacity = f"{total}G"
     else:
-        # Match "16G" or "32GB"
-        m = re.search(r'(\d+)\s*G(?:B)?', ram_name)
-        if m:
-            cap = int(m.group(1))
+        # Extract capacity: 8G, 16G, 24G, 32G, 48G, 64G, etc.
+        cap_match = re.search(r'(\d+)\s*[Gg](?:B)?', mem_name)
+        capacity = cap_match.group(1) + "G" if cap_match else ""
 
-    # Extract frequency first (needed for DDR type inference)
-    freq = ""
-    # Try to find frequency after DDR4/DDR5
-    m = re.search(r'DDR[45]\s*(\d{4})', ram_name.upper())
-    if m:
-        freq = m.group(1)
-    else:
-        # Common frequencies: 2400, 2666, 3000, 3200, 3600, 4800, 5000, 5200, 5600, 6000, 6400, 7200, 8000
-        m = re.search(r'(2[1-9]\d{2}|[3-9]\d{3})\s*(?:MHz)?', ram_name)
-        if m:
-            freq = m.group(1)
+    # Extract frequency: 3200, 3600, 5600, 6000, 6400, 7200, etc.
+    # Look for 4-digit numbers that are memory frequencies
+    freq_match = re.search(r'(\d{4})\s*(?:MHz)?', mem_name)
+    freq = freq_match.group(1) if freq_match else ""
 
-    # Extract DDR type
-    ddr = ""
-    m = re.search(r'(DDR[45])', ram_name.upper())
-    if m:
-        ddr = m.group(1)
-    elif freq and int(freq) >= 4800:
-        ddr = "DDR5"
-    elif freq and int(freq) <= 4000:
-        ddr = "DDR4"
-
-    if cap and ddr and freq:
-        return f"{cap}G {ddr} {freq}"
-    elif cap and ddr:
-        return f"{cap}G {ddr}"
-    return ram_name
+    if capacity and ddr_type and freq:
+        return f"{capacity} {ddr_type} {freq}"
+    elif capacity and ddr_type:
+        return f"{capacity} {ddr_type}"
+    elif capacity and freq:
+        return f"{capacity} DDR5 {freq}"  # Default to DDR5 if no DDR type but has freq
+    elif capacity:
+        return capacity
+    return mem_name
 
 
-# ---- Process products ----
-groups = {}
+def is_diy(computer_no):
+    """判断编号是否为DIY类型"""
+    return computer_no and computer_no.startswith("diy")
+
+
+# Process all products
+results = []
 for p in products:
     specs = p.get("specs", {})
-    cpu = specs.get("CPU", "").strip()
-    gpu_full = specs.get("显卡", "").strip()
-    ram = specs.get("内存", "").strip()
+    cpu = specs.get("CPU", "")
+    gpu = specs.get("显卡", "")
+    mem = specs.get("内存", "")
 
-    if not cpu or not gpu_full:
+    if not cpu or not gpu or not mem:
         continue
 
-    gpu_core = extract_gpu_core(gpu_full)
-    ram_spec = extract_ram_spec(ram)
+    gpu_core = extract_gpu_core(gpu)
+    ram_spec = extract_ram_spec(mem)
 
-    key = (cpu, gpu_core, ram_spec)
+    key = f"{cpu}|{gpu_core}|{ram_spec}"
 
-    if key not in groups or p.get("price", 999999) < groups[key].get("price", 999999):
-        groups[key] = p
+    results.append({
+        "key": key,
+        "cpu": cpu,
+        "gpu_core": gpu_core,
+        "gpu_full": gpu,
+        "ram_spec": ram_spec,
+        "ram_full": mem,
+        "product": p
+    })
 
-print(f"Unique combos: {len(groups)}")
+print(f"Total valid configs: {len(results)}")
 
-# Sort by price
-results = sorted(groups.values(), key=lambda x: x.get("price", 0))
+# Group by key, apply selection rules
+from collections import defaultdict
+groups = defaultdict(list)
+for r in results:
+    groups[r["key"]].append(r)
 
-# ---- Generate Excel ----
+final_products = []
+for key, items in groups.items():
+    # Sort: DIY first, then by price descending
+    items.sort(key=lambda x: (
+        1 if is_diy(x["product"].get("computerNo", "")) else 0,
+        x["product"].get("price", 0)
+    ), reverse=True)
+    final_products.append(items[0])
+
+# Sort final by price
+final_products.sort(key=lambda x: x["product"].get("price", 0))
+
+print(f"Unique combos: {len(final_products)}")
+
+# Create Excel
 wb = Workbook()
 ws = wb.active
-ws.title = "整机配置组合"
+ws.title = "去重配置组合"
 
 headers = [
     "序号", "配置名称", "编号", "价格(元)", "鲁大师跑分",
-    "CPU型号", "GPU核心", "内存规格",
-    "机箱", "CPU", "显卡(完整)", "主板", "内存(完整)", "硬盘", "CPU散热", "电源",
+    "CPU", "GPU核心", "显卡(完整)", "内存规格", "内存(完整)",
+    "机箱", "主板", "硬盘", "CPU散热", "电源",
     "发货时效"
 ]
 
@@ -244,28 +200,22 @@ for col, header in enumerate(headers, 1):
     cell.alignment = header_alignment
     cell.border = thin_border
 
-for idx, p in enumerate(results, 1):
+for idx, item in enumerate(final_products, 1):
+    p = item["product"]
     specs = p.get("specs", {})
-    cpu = specs.get("CPU", "").strip()
-    gpu_full = specs.get("显卡", "").strip()
-    ram = specs.get("内存", "").strip()
-    gpu_core = extract_gpu_core(gpu_full)
-    ram_spec = extract_ram_spec(ram)
-
     row_data = [
         idx,
         p.get("name", ""),
         p.get("computerNo", ""),
         p.get("price", 0),
         p.get("score", 0),
-        cpu,
-        gpu_core,
-        ram_spec,
+        item["cpu"],
+        item["gpu_core"],
+        item["gpu_full"],
+        item["ram_spec"],
+        item["ram_full"],
         specs.get("机箱", ""),
-        cpu,
-        gpu_full,
         specs.get("主板", ""),
-        ram,
         specs.get("硬盘", ""),
         specs.get("CPU散热", specs.get("散热器", "")),
         specs.get("电源", ""),
@@ -280,13 +230,22 @@ for idx, p in enumerate(results, 1):
         if col == 5 and isinstance(value, (int, float)) and value > 0:
             cell.number_format = '#,##0'
 
-col_widths = [6, 40, 14, 12, 12, 28, 18, 20, 35, 28, 35, 28, 35, 28, 30, 40, 14]
+col_widths = [6, 40, 14, 12, 12, 28, 16, 35, 18, 35, 35, 28, 28, 30, 40, 14]
 for i, width in enumerate(col_widths, 1):
     ws.column_dimensions[get_column_letter(i)].width = width
 
 ws.freeze_panes = "A2"
-ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(results) + 1}"
+ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(final_products) + 1}"
 
 wb.save(EXCEL_PATH)
-print(f"Excel saved: {EXCEL_PATH}")
-print(f"Total unique combos: {len(results)}")
+print(f"\nExcel saved: {EXCEL_PATH}")
+
+# Print summary stats
+cpu_set = set(item["cpu"] for item in final_products)
+gpu_set = set(item["gpu_core"] for item in final_products)
+ram_set = set(item["ram_spec"] for item in final_products)
+print(f"\n--- Summary ---")
+print(f"Unique CPUs: {len(cpu_set)}")
+print(f"Unique GPU cores: {len(gpu_set)}")
+print(f"Unique RAM specs: {len(ram_set)}")
+print(f"Total unique combos: {len(final_products)}")
